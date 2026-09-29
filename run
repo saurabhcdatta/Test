@@ -1,0 +1,15 @@
+root <- "//hqwinfs1/ECONOMIST/Committees and Task Force/NCUSIF Investment"
+files <- c(
+  "2020" = file.path(root, "SIF Model 2020/October/Standard Projection Equity Ratio Model 10_15_2020.xlsx"),
+  "2021" = file.path(root, "SIF Model 2021/Final/Decline_Equity_Ratio_Nov29_Russell.xlsx"),
+  "2022" = file.path(root, "SIF Model 2022/November/Projected_Decline_Equity_OCE_Calc_November_4_2022.xlsx"),
+  "2023" = file.path(root, "SIF Model 2023/November/Decline_Equity_New_Budget_23_Nov_2023.xlsx"),
+  "2024" = file.path(root, "SIF Model 2024/November/10_Years_wo_Melrose/NOL Stnd Project Equity Ratio Model 2024 - Nov 14 - 10 year loss wo Melrose.xlsx"),
+  "2025" = file.path(root, "SIF Model 2025/October/10_Years_wo_Melrose/NOL Stnd Proj ER Model 2025 fourth Early Est 10 yr loss WO Melrose_June SIF October Moodys.xlsx"),
+  "2026" = file.path(root, "SIF Model 2026/September/10_Years_wo_Melrose/NOL Stnd Proj ER Model 2026 September - 10 yr loss WO Melrose_June SIF Moodys.xlsx"))
+stopifnot(all(file.exists(files)))      # stops here, naming nothing, if a path is wrong — check each with file.exists(files)
+
+panel_new <- build_panel(files, sheet = "OCE Adverse")
+check_panel(panel_new)
+compare_panels(panel_new, read.csv("nol_panel.csv"))
+write.csv(panel_new, "nol_panel_from_excel.csv", row.names = FALSE)

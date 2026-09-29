@@ -7,14 +7,20 @@
 # Base R only: the workbook is unzipped and its XML parsed with regular expressions. If readxl
 # happens to be installed it is used instead (same result). Nothing else is required.
 #
-# Usage (block by block in RStudio):
-#   files <- c("2020" = "S:/.../Standard Projection Equity Ratio Model 10_15_2020.xlsx",
-#              "2021" = "S:/.../Decline_Equity_Ratio_Nov29_Russell.xlsx", ...)
-#   panel_new <- build_panel(files, sheet = "OCE Adverse")
-#   check_panel(panel_new)                       # identities to the dollar
-#   compare_panels(panel_new, read.csv("nol_panel.csv"))   # against the hand-transcribed panel
-#   write.csv(panel_new, "nol_panel.csv", row.names = FALSE)
-# The same call with sheet = "OCE Severely Adverse" builds the severely-adverse panel.
+# Standalone: set the paths in block 0, run blocks 1-3 (functions), then block 4 builds the adverse and
+# severely-adverse panels and writes them. Nothing else is read.
+
+## 0. paths -- edit these ---------------------------------------------------------------------------
+root  <- "//hqwinfs1/ECONOMIST/Committees and Task Force/NCUSIF Investment"     # forward slashes: R on Windows accepts UNC paths this way
+files <- c(
+  "2020" = file.path(root, "SIF Model 2020/October/Standard Projection Equity Ratio Model 10_15_2020.xlsx"),
+  "2021" = file.path(root, "SIF Model 2021/Final/Decline_Equity_Ratio_Nov29_Russell.xlsx"),
+  "2022" = file.path(root, "SIF Model 2022/November/Projected_Decline_Equity_OCE_Calc_November_4_2022.xlsx"),
+  "2023" = file.path(root, "SIF Model 2023/November/Decline_Equity_New_Budget_23_Nov_2023.xlsx"),
+  "2024" = file.path(root, "SIF Model 2024/November/10_Years_wo_Melrose/NOL Stnd Project Equity Ratio Model 2024 - Nov 14 - 10 year loss wo Melrose.xlsx"),
+  "2025" = file.path(root, "SIF Model 2025/October/10_Years_wo_Melrose/NOL Stnd Proj ER Model 2025 fourth Early Est 10 yr loss WO Melrose_June SIF October Moodys.xlsx"),
+  "2026" = file.path(root, "SIF Model 2026/September/10_Years_wo_Melrose/NOL Stnd Proj ER Model 2026 September - 10 yr loss WO Melrose_June SIF Moodys.xlsx"))
+out_dir <- "."                                              # where the panel CSVs are written
 
 ## 1. read a worksheet into a cell table ---------------------------------------------------------
 xml_unescape <- function(x) { x <- gsub("&lt;", "<", x, fixed = TRUE); x <- gsub("&gt;", ">", x, fixed = TRUE)
@@ -93,7 +99,10 @@ build_vintage <- function(path, vintage, sheet = "OCE Adverse", verbose = TRUE) 
   g <- function(label, which = 1, starts = FALSE) vals_at(cells, row_of(cells, label, which, starts, need_num_col = proj[1]), proj)
   b <- function(label, which = 1, starts = FALSE) vals_at(cells, row_of(cells, label, which, starts, need_num_col = base_col), base_col)
   pct <- function(x) 100 * x
-  r_er <- row_of(cells, "Equity Ratio", starts = TRUE, need_num_col = proj[1])
+  er_rows <- find_rows(cells, "Equity Ratio", starts = TRUE)
+  er_rows <- er_rows[!norm(sapply(er_rows, function(rr) cells$chr[cells$row == rr & cells$col <= 4 & is.na(cells$num)][1])) %in% c("equity ratio model")]
+  er_rows <- er_rows[sapply(er_rows, function(rr) { z <- cells$num[cells$row == rr & cells$col == proj[1]]; length(z) && !is.na(z[1]) && z[1] > 0 && z[1] < 0.05 })]   # a ratio, not a year
+  r_er <- if (length(er_rows)) er_rows[1] else NA
   reb_rows <- find_rows(cells, "Total Rebate Dollars")
   rebate <- if (length(reb_rows)) vals_at(cells, reb_rows[1], proj) else rep(0, 11)
   rebate[is.na(rebate)] <- 0
@@ -108,22 +117,30 @@ build_vintage <- function(path, vintage, sheet = "OCE Adverse", verbose = TRUE) 
     net_income = g("Net Income"), cd_adj = g("Capital Deposit Adjustment"),
     distribution = c(0, abs(rebate[1:10])),            # declared on the column where the ratio exceeds the NOL, deducted next period
     portfolio = g("Portfolio"), cap_deposit = g("Capital Deposit"), equity = g("Equity"),
-    insured_shares = g("Insured Shares"), equity_ratio = pct(vals_at(cells, r_er, proj)), stringsAsFactors = FALSE)
+    insured_shares = g("Insured Shares"), equity_ratio = NA_real_, stringsAsFactors = FALSE)
+  er_calc <- 100 * (d$cap_deposit + d$equity) / d$insured_shares
+  er_read <- if (!is.na(r_er)) pct(vals_at(cells, r_er, proj)) else rep(NA_real_, 11)
+  if (all(is.na(er_read)) || max(abs(er_read - er_calc), na.rm = TRUE) > 0.002) {
+    if (verbose) cat(vintage, ": equity-ratio row not usable (", if (is.na(r_er)) "not found" else "does not match the components", "); using (deposit + equity) / shares\n")
+    d$equity_ratio <- er_calc } else d$equity_ratio <- er_read
   d$g_fee[is.na(d$g_fee)] <- 0; d$ngn_adj[is.na(d$ngn_adj)] <- 0
   nol_in <- vals_at(cells, row_of(cells, "NOL", need_num_col = proj[1]), proj); nol_in <- nol_in[!is.na(nol_in)]
   d$nol_input <- if (length(nol_in)) pct(nol_in[1]) else NA_real_
   base <- d[1, ]; base[] <- NA; base$vintage <- vintage; base$period <- -1
   base$portfolio_yield <- pct(b("Portfolio Yield")); base$portfolio <- b("Portfolio"); base$cap_deposit <- b("Capital Deposit")
-  base$equity <- b("Equity"); base$insured_shares <- b("Insured Shares"); base$equity_ratio <- pct(vals_at(cells, r_er, base_col))
+  base$equity <- b("Equity"); base$insured_shares <- b("Insured Shares")
+  base_er_read <- if (!is.na(r_er)) pct(vals_at(cells, r_er, base_col)) else NA_real_
+  base$equity_ratio <- if (!is.na(base_er_read) && abs(base_er_read - 100 * (base$cap_deposit + base$equity) / base$insured_shares) < 0.002) base_er_read else 100 * (base$cap_deposit + base$equity) / base$insured_shares
   base$nol_input <- d$nol_input[1]
   out <- rbind(base, d)
   out$total_fund <- out$cap_deposit + out$equity
   out$half <- ifelse(out$period == -1, paste0(vintage, "H1"), ifelse(out$period %% 2 == 0, paste0(vintage + (out$period + 1) %/% 2, "H2"), paste0(vintage + (out$period + 1) %/% 2, "H1")))
   out$period_end <- ifelse(out$period == -1, paste0(vintage, "-06-30"), ifelse(out$period %% 2 == 0, paste0(vintage + (out$period + 1) %/% 2, "-12-31"), paste0(vintage + (out$period + 1) %/% 2, "-06-30")))
   out$is_base <- as.integer(out$period == -1)
+  out$scenario <- sheet
   if (verbose) cat(sprintf("%s: %s  base col %d, projected cols %d-%d, %d rows; June ER %.3f, Dec+5 ER %.3f, NOL input %.2f\n",
                            vintage, basename(path), base_col, proj[1], proj[11], nrow(out), out$equity_ratio[1], out$equity_ratio[12], out$nol_input[1]))
-  out[, c("vintage", "period", "half", "period_end", "is_base", setdiff(names(out), c("vintage", "period", "half", "period_end", "is_base")))]
+  out[, c("vintage", "period", "half", "period_end", "is_base", setdiff(names(out), c("vintage", "period", "half", "period_end", "is_base", "scenario")), "scenario")]
 }
 build_panel <- function(files, sheet = "OCE Adverse", verbose = TRUE) {
   stopifnot(!is.null(names(files)))
@@ -156,22 +173,25 @@ compare_panels <- function(new, old, tol = 1e-6) {          # field-by-field aga
   num <- setdiff(names(new)[sapply(new, is.numeric)], key)
   diffs <- do.call(rbind, lapply(num, function(f) { a <- m[[paste0(f, ".new")]]; b <- m[[paste0(f, ".old")]]
     d <- abs(a - b); d[is.na(a) & is.na(b)] <- 0; data.frame(field = f, max_abs_diff = max(d, na.rm = TRUE), n_diff = sum(d > tol, na.rm = TRUE)) }))
-  print(diffs[order(-diffs$max_abs_diff), ], row.names = FALSE)
+  print(diffs[order(-diffs$max_abs_diff), ], row.names = FALSE, na = "")
   cat(nrow(m), "matched rows of", nrow(new), "new /", nrow(old), "old\n"); invisible(diffs)
 }
 
 ## 4. run -----------------------------------------------------------------------------------------------
-if (FALSE) {                                                  # set your paths, then run this block
-  files <- c("2020" = "Standard Projection Equity Ratio Model 10_15_2020.xlsx",
-             "2021" = "Decline_Equity_Ratio_Nov29_Russell.xlsx",
-             "2022" = "Projected_Decline_Equity_OCE_Calc_November_4_2022.xlsx",
-             "2023" = "Decline_Equity_New_Budget_23_Nov_2023.xlsx",
-             "2024" = "NOL Stnd Project Equity Ratio Model 2024 - Nov 14 - 10 year loss wo Melrose.xlsx",
-             "2025" = "NOL Stnd Proj ER Model 2025 fourth Early Est 10 yr loss WO Melrose_June SIF October Moodys.xlsx",
-             "2026" = "NOL Stnd Proj ER Model 2026 September - 10 yr loss WO Melrose_June SIF Moodys.xlsx")
-  panel_new <- build_panel(files, sheet = "OCE Adverse")
-  check_panel(panel_new)
-  compare_panels(panel_new, read.csv("nol_panel.csv"))
-  write.csv(panel_new, "nol_panel.csv", row.names = FALSE)
-  sev <- build_panel(files, sheet = "OCE Severely Adverse"); write.csv(sev, "nol_panel_severely_adverse.csv", row.names = FALSE)
-}
+# (select and run this block; nothing below reads any existing panel)
+missing <- files[!file.exists(files)]
+if (length(missing)) stop("cannot find: ", paste(names(missing), basename(missing), collapse = " | "))
+
+panel_adv <- build_panel(files, sheet = "OCE Adverse")
+check_panel(panel_adv)
+write.csv(panel_adv, file.path(out_dir, "nol_panel_adverse.csv"), row.names = FALSE, na = "")
+write.csv(panel_adv, file.path(out_dir, "nol_panel.csv"), row.names = FALSE, na = "")     # the input the rest of the pipeline reads
+
+panel_sev <- build_panel(files, sheet = "OCE Severely Adverse")
+check_panel(panel_sev)
+write.csv(panel_sev, file.path(out_dir, "nol_panel_severely_adverse.csv"), row.names = FALSE, na = "")
+
+# quick look: formula NOL (1.20 + Dec Y minus Dec Y+5) by vintage and scenario
+nol_quick <- function(p) sapply(split(p, p$vintage), function(d) { d <- d[order(d$period), ]; max(1.20, 1.20 + d$equity_ratio[d$period == 0] - d$equity_ratio[d$period == 10]) })
+print(round(rbind(adverse = nol_quick(panel_adv), severely_adverse = nol_quick(panel_sev)), 3))
+cat("written:", file.path(out_dir, c("nol_panel_adverse.csv", "nol_panel.csv", "nol_panel_severely_adverse.csv")), sep = "\n  ")

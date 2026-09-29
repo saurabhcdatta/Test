@@ -1,0 +1,177 @@
+# 0_build_panel_from_excel.R --------------------------------------------------------------
+# Build nol_panel.csv directly from the OCE "Standard Projection Equity Ratio Model" workbooks.
+# Reads one tab per model year (default "OCE Adverse"), finds every row by its label (not by row
+# number, which drifts between years), takes the base column plus the eleven projected columns,
+# converts to the panel's units and sign conventions, and checks the accounting identities.
+#
+# Base R only: the workbook is unzipped and its XML parsed with regular expressions. If readxl
+# happens to be installed it is used instead (same result). Nothing else is required.
+#
+# Usage (block by block in RStudio):
+#   files <- c("2020" = "S:/.../Standard Projection Equity Ratio Model 10_15_2020.xlsx",
+#              "2021" = "S:/.../Decline_Equity_Ratio_Nov29_Russell.xlsx", ...)
+#   panel_new <- build_panel(files, sheet = "OCE Adverse")
+#   check_panel(panel_new)                       # identities to the dollar
+#   compare_panels(panel_new, read.csv("nol_panel.csv"))   # against the hand-transcribed panel
+#   write.csv(panel_new, "nol_panel.csv", row.names = FALSE)
+# The same call with sheet = "OCE Severely Adverse" builds the severely-adverse panel.
+
+## 1. read a worksheet into a cell table ---------------------------------------------------------
+xml_unescape <- function(x) { x <- gsub("&lt;", "<", x, fixed = TRUE); x <- gsub("&gt;", ">", x, fixed = TRUE)
+  x <- gsub("&quot;", "\"", x, fixed = TRUE); x <- gsub("&apos;", "'", x, fixed = TRUE); gsub("&amp;", "&", x, fixed = TRUE) }
+col2num <- function(s) { ch <- utf8ToInt(toupper(s)) - 64; as.integer(sum(ch * 26^(rev(seq_along(ch)) - 1))) }
+
+read_cells_base <- function(path, sheet) {
+  tmp <- tempfile("xlsx_"); dir.create(tmp); on.exit(unlink(tmp, recursive = TRUE))
+  unzip(path, exdir = tmp)
+  rd <- function(f) paste(readLines(file.path(tmp, f), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  wb <- rd("xl/workbook.xml")
+  sheets <- regmatches(wb, gregexpr("<sheet [^>]*/>", wb))[[1]]
+  nm  <- xml_unescape(sub('.*name="([^"]*)".*', "\\1", sheets)); rid <- sub('.*r:id="([^"]*)".*', "\\1", sheets)
+  if (!sheet %in% nm) stop("sheet '", sheet, "' not found; tabs are: ", paste(nm, collapse = " | "))
+  rels <- rd("xl/_rels/workbook.xml.rels")
+  rel  <- regmatches(rels, gregexpr("<Relationship [^>]*/>", rels))[[1]]
+  rel  <- rel[grepl(paste0('Id="', rid[nm == sheet], '"'), rel, fixed = TRUE)]
+  target <- sub('.*Target="([^"]*)".*', "\\1", rel); target <- sub("^/?xl/", "", target); target <- sub("^/", "", target)
+  ss <- character(0)
+  if (file.exists(file.path(tmp, "xl/sharedStrings.xml"))) {
+    s <- rd("xl/sharedStrings.xml")
+    si <- regmatches(s, gregexpr("<si>.*?</si>", s, perl = TRUE))[[1]]
+    ss <- vapply(si, function(z) { t <- regmatches(z, gregexpr("<t[^>]*>.*?</t>", z, perl = TRUE))[[1]]
+      xml_unescape(paste(gsub("<t[^>]*>|</t>", "", t), collapse = "")) }, "")
+  }
+  x <- rd(file.path("xl", target))
+  cells <- regmatches(x, gregexpr('<c r="[A-Z]+[0-9]+"(?:[^>]*?/>|[^>]*?>.*?</c>)', x, perl = TRUE))[[1]]
+  if (!length(cells)) stop("no cells found in ", target)
+  addr <- sub('^<c r="([A-Z]+[0-9]+)".*', "\\1", cells)
+  typ  <- ifelse(grepl(' t="', cells), sub('^<c [^>]*? t="([^"]*)".*', "\\1", cells), "n")
+  val  <- ifelse(grepl("<v>", cells), sub(".*<v>(.*?)</v>.*", "\\1", cells), NA)
+  inl  <- ifelse(grepl("<is>", cells), sub(".*<is>.*?<t[^>]*>(.*?)</t>.*", "\\1", cells), NA)
+  out <- data.frame(row = as.integer(sub("^[A-Z]+", "", addr)), col = vapply(sub("[0-9]+$", "", addr), col2num, 1L),
+                    chr = NA_character_, num = NA_real_, stringsAsFactors = FALSE)
+  is_s <- typ == "s" & !is.na(val); out$chr[is_s] <- ss[as.integer(val[is_s]) + 1]
+  is_str <- typ %in% c("str", "inlineStr"); out$chr[is_str] <- xml_unescape(ifelse(is.na(inl[is_str]), val[is_str], inl[is_str]))
+  is_n <- typ %in% c("n", "b") & !is.na(val); out$num[is_n] <- suppressWarnings(as.numeric(val[is_n]))
+  out$chr[is_n] <- as.character(out$num[is_n])
+  out[!(is.na(out$chr) & is.na(out$num)), ]
+}
+read_cells_readxl <- function(path, sheet) {
+  m <- readxl::read_excel(path, sheet = sheet, col_names = FALSE, col_types = "list", .name_repair = "minimal")
+  out <- do.call(rbind, lapply(seq_len(ncol(m)), function(j) { v <- m[[j]]
+    data.frame(row = seq_along(v), col = j, chr = vapply(v, function(z) if (is.null(z) || (length(z) == 1 && is.na(z))) NA_character_ else as.character(z), ""),
+               num = vapply(v, function(z) if (is.numeric(z) && length(z) == 1) as.numeric(z) else NA_real_, 1), stringsAsFactors = FALSE) }))
+  out[!is.na(out$chr), ]
+}
+read_cells <- function(path, sheet) if (requireNamespace("readxl", quietly = TRUE)) read_cells_readxl(path, sheet) else read_cells_base(path, sheet)
+
+## 2. label-driven layout ----------------------------------------------------------------------
+norm <- function(s) { s <- tolower(trimws(s)); s <- sub(":$", "", s); gsub("\\s+", " ", s) }
+find_rows <- function(cells, label, starts = FALSE, max_col = 4) {           # all rows (in order) whose label matches
+  lab <- cells[!is.na(cells$chr) & cells$col <= max_col & is.na(cells$num), ]
+  key <- norm(lab$chr)
+  hit <- if (starts) startsWith(key, norm(label)) else key == norm(label)
+  sort(unique(lab$row[hit]))
+}
+row_of <- function(cells, label, which = 1, starts = FALSE, need_num_col = NULL) {
+  r <- find_rows(cells, label, starts)
+  if (!length(r)) stop("label not found: '", label, "'")
+  if (!is.null(need_num_col)) {                             # prefer rows that actually carry a number in that column (skips headers and the definitions block)
+    ok <- r[sapply(r, function(rr) any(cells$row == rr & cells$col == need_num_col & !is.na(cells$num)))]
+    if (length(ok)) r <- ok
+  }
+  if (length(r) < which) stop("label '", label, "': occurrence ", which, " not found"); r[which] }
+vals_at <- function(cells, row, cols) sapply(cols, function(cc) { z <- cells$num[cells$row == row & cells$col == cc]; if (length(z)) z[1] else NA_real_ })
+
+build_vintage <- function(path, vintage, sheet = "OCE Adverse", verbose = TRUE) {
+  cells <- read_cells(path, sheet)
+  cand <- find_rows(cells, "Reinvestment Rate")
+  r_reinv <- cand[sapply(cand, function(rr) sum(cells$row == rr & !is.na(cells$num)) >= 5)][1]   # the data row, not the definitions row
+  if (is.na(r_reinv)) stop("could not find the Reinvestment Rate data row")
+  num_cols <- sort(unique(cells$col[cells$row == r_reinv & !is.na(cells$num)]))
+  first <- num_cols[1]; proj <- first + 0:10; base_col <- first - 1
+  if (length(num_cols) < 11) warning(vintage, ": only ", length(num_cols), " projected columns found on the Reinvestment Rate row")
+  g <- function(label, which = 1, starts = FALSE) vals_at(cells, row_of(cells, label, which, starts, need_num_col = proj[1]), proj)
+  b <- function(label, which = 1, starts = FALSE) vals_at(cells, row_of(cells, label, which, starts, need_num_col = base_col), base_col)
+  pct <- function(x) 100 * x
+  r_er <- row_of(cells, "Equity Ratio", starts = TRUE, need_num_col = proj[1])
+  reb_rows <- find_rows(cells, "Total Rebate Dollars")
+  rebate <- if (length(reb_rows)) vals_at(cells, reb_rows[1], proj) else rep(0, 11)
+  rebate[is.na(rebate)] <- 0
+  d <- data.frame(vintage = vintage, period = 0:10,
+    reinvest_rate = pct(g("Reinvestment Rate")), share_growth = pct(g("Insured Share Growth")),
+    otr = pct(g("Overhead Transfer Rate (OTR)")), budget_growth = pct(g("Budget Growth")),
+    ins_losses = abs(g("Insurance Losses")), g_fee = g("G-Fee"), ngn_adj = g("NRV NGN Liquidation Adjustment"),
+    nol_input = NA_real_, target_overnight = g("Target Ending Overnight Balance"), overnight_rate = pct(g("Overnight Rate")),
+    yield_7yr = pct(g("7-Year Yield")), nonovn_maturities = g("Non-Overnight Maturities"), nonovn_mat_yield = pct(g("Non-Overnight Maturity Yield")),
+    maturities = g("Maturities"), maturity_yield = pct(g("Maturity Yield")), portfolio_yield = pct(g("Portfolio Yield")),
+    op_budget = g("Operating Fund Budget"), interest_rev = g("Interest Revenue"), opex = abs(g("Operating Expenses")),
+    net_income = g("Net Income"), cd_adj = g("Capital Deposit Adjustment"),
+    distribution = c(0, abs(rebate[1:10])),            # declared on the column where the ratio exceeds the NOL, deducted next period
+    portfolio = g("Portfolio"), cap_deposit = g("Capital Deposit"), equity = g("Equity"),
+    insured_shares = g("Insured Shares"), equity_ratio = pct(vals_at(cells, r_er, proj)), stringsAsFactors = FALSE)
+  d$g_fee[is.na(d$g_fee)] <- 0; d$ngn_adj[is.na(d$ngn_adj)] <- 0
+  nol_in <- vals_at(cells, row_of(cells, "NOL", need_num_col = proj[1]), proj); nol_in <- nol_in[!is.na(nol_in)]
+  d$nol_input <- if (length(nol_in)) pct(nol_in[1]) else NA_real_
+  base <- d[1, ]; base[] <- NA; base$vintage <- vintage; base$period <- -1
+  base$portfolio_yield <- pct(b("Portfolio Yield")); base$portfolio <- b("Portfolio"); base$cap_deposit <- b("Capital Deposit")
+  base$equity <- b("Equity"); base$insured_shares <- b("Insured Shares"); base$equity_ratio <- pct(vals_at(cells, r_er, base_col))
+  base$nol_input <- d$nol_input[1]
+  out <- rbind(base, d)
+  out$total_fund <- out$cap_deposit + out$equity
+  out$half <- ifelse(out$period == -1, paste0(vintage, "H1"), ifelse(out$period %% 2 == 0, paste0(vintage + (out$period + 1) %/% 2, "H2"), paste0(vintage + (out$period + 1) %/% 2, "H1")))
+  out$period_end <- ifelse(out$period == -1, paste0(vintage, "-06-30"), ifelse(out$period %% 2 == 0, paste0(vintage + (out$period + 1) %/% 2, "-12-31"), paste0(vintage + (out$period + 1) %/% 2, "-06-30")))
+  out$is_base <- as.integer(out$period == -1)
+  if (verbose) cat(sprintf("%s: %s  base col %d, projected cols %d-%d, %d rows; June ER %.3f, Dec+5 ER %.3f, NOL input %.2f\n",
+                           vintage, basename(path), base_col, proj[1], proj[11], nrow(out), out$equity_ratio[1], out$equity_ratio[12], out$nol_input[1]))
+  out[, c("vintage", "period", "half", "period_end", "is_base", setdiff(names(out), c("vintage", "period", "half", "period_end", "is_base")))]
+}
+build_panel <- function(files, sheet = "OCE Adverse", verbose = TRUE) {
+  stopifnot(!is.null(names(files)))
+  do.call(rbind, lapply(names(files), function(v) build_vintage(files[[v]], as.integer(v), sheet, verbose)))
+}
+
+## 3. checks -----------------------------------------------------------------------------------------
+check_panel <- function(p, tol = 2) {                       # the model's own identities, dollars
+  p <- p[order(p$vintage, p$period), ]
+  lag_v <- function(x) ave(x, p$vintage, FUN = function(z) c(NA, head(z, -1)))
+  pr <- p$period >= 0
+  chk <- data.frame(vintage = p$vintage[pr],
+    interest = (p$interest_rev - lag_v(p$portfolio) * p$portfolio_yield / 100 / 2)[pr],
+    opex     = (p$opex - p$op_budget * p$otr / 100)[pr],
+    ni       = (p$net_income - (p$interest_rev - p$opex - p$ins_losses))[pr],                   # G-fee and NGN adjustments go straight to equity
+    cd       = (p$cap_deposit - 0.01 * lag_v(p$insured_shares))[pr],
+    cd_adj   = (p$cd_adj - (p$cap_deposit - lag_v(p$cap_deposit)))[pr],
+    equity   = (p$equity - (lag_v(p$equity) + p$net_income + p$g_fee + p$ngn_adj - p$distribution))[pr],
+    portf    = (p$portfolio - (lag_v(p$portfolio) + p$net_income))[pr],
+    shares   = (p$insured_shares - lag_v(p$insured_shares) * (1 + p$share_growth / 100))[pr] / 1e6,   # $ millions (growth is shown rounded)
+    er       = (p$equity_ratio - 100 * (p$cap_deposit + p$equity) / p$insured_shares)[pr] * 1e4)         # 0.01 bp
+  worst <- aggregate(. ~ vintage, data = chk, FUN = function(z) max(abs(z), na.rm = TRUE))
+  print(format(worst, digits = 2, scientific = TRUE))
+  bad <- cbind(worst[, c("opex", "ni", "cd", "cd_adj", "equity", "portf")] > tol, interest = worst$interest > 2e4)   # yields are shown to 4 dp, so interest reconciles to ~$5K
+  if (any(bad)) warning("identities off in: ", paste(worst$vintage[rowSums(bad) > 0], collapse = ", "), " (see table)") else cat("dollar identities hold (interest within yield rounding; shares/er columns reflect displayed rounding of growth and ratio)\n")
+  invisible(worst)
+}
+compare_panels <- function(new, old, tol = 1e-6) {          # field-by-field against an existing panel
+  key <- c("vintage", "period"); m <- merge(new, old, by = key, suffixes = c(".new", ".old"))
+  num <- setdiff(names(new)[sapply(new, is.numeric)], key)
+  diffs <- do.call(rbind, lapply(num, function(f) { a <- m[[paste0(f, ".new")]]; b <- m[[paste0(f, ".old")]]
+    d <- abs(a - b); d[is.na(a) & is.na(b)] <- 0; data.frame(field = f, max_abs_diff = max(d, na.rm = TRUE), n_diff = sum(d > tol, na.rm = TRUE)) }))
+  print(diffs[order(-diffs$max_abs_diff), ], row.names = FALSE)
+  cat(nrow(m), "matched rows of", nrow(new), "new /", nrow(old), "old\n"); invisible(diffs)
+}
+
+## 4. run -----------------------------------------------------------------------------------------------
+if (FALSE) {                                                  # set your paths, then run this block
+  files <- c("2020" = "Standard Projection Equity Ratio Model 10_15_2020.xlsx",
+             "2021" = "Decline_Equity_Ratio_Nov29_Russell.xlsx",
+             "2022" = "Projected_Decline_Equity_OCE_Calc_November_4_2022.xlsx",
+             "2023" = "Decline_Equity_New_Budget_23_Nov_2023.xlsx",
+             "2024" = "NOL Stnd Project Equity Ratio Model 2024 - Nov 14 - 10 year loss wo Melrose.xlsx",
+             "2025" = "NOL Stnd Proj ER Model 2025 fourth Early Est 10 yr loss WO Melrose_June SIF October Moodys.xlsx",
+             "2026" = "NOL Stnd Proj ER Model 2026 September - 10 yr loss WO Melrose_June SIF Moodys.xlsx")
+  panel_new <- build_panel(files, sheet = "OCE Adverse")
+  check_panel(panel_new)
+  compare_panels(panel_new, read.csv("nol_panel.csv"))
+  write.csv(panel_new, "nol_panel.csv", row.names = FALSE)
+  sev <- build_panel(files, sheet = "OCE Severely Adverse"); write.csv(sev, "nol_panel_severely_adverse.csv", row.names = FALSE)
+}

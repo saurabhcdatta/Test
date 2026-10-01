@@ -13,11 +13,13 @@ output:
 # Everything must sit in ONE folder: the numbered scripts, nol_panel.csv, tables/, figures/, deck_images/,
 # nol_deck_reference.pptx / nol_brief_reference.docx and this Rmd -- and the Rmd knits from that folder
 # (RStudio default: Knit > Knit Directory > Document Directory). Check before anything is sourced:
-need <- c("1_load_panel.R", "7_report_tables.R", "nol_panel.csv", "nol_deck_reference.pptx", "deck_images/c2_nol.png")
+need <- c("1_load_panel.R", "7_report_tables.R", "14_deck_charts.R", "nol_panel.csv", "nol_deck_reference.pptx")
 missing <- need[!file.exists(need)]
 if (length(missing)) stop("Knitting from ", normalizePath(getwd()), " but it does not contain: ", paste(missing, collapse = ", "),
   ". Put this Rmd in the folder that holds the numbered scripts and nol_panel.csv (made by block 4 of 0_build_panel_from_excel.R), ",
-  "run run_all.R there (it also draws deck_images/), then knit from that folder.")
+  "run run_all.R there, then knit from that folder.")
+if (!any(grepl("c5_assumed", readLines("14_deck_charts.R", warn = FALSE))))
+  stop("14_deck_charts.R is an older version (it does not draw deck_images/c5_assumed.png); replace it with the current one from the package.")
 ```
 
 ```{r setup, include=FALSE}
@@ -27,6 +29,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 src <- function(f) invisible(capture.output(source(f, encoding = "UTF-8")))
 src("1_load_panel.R"); src("2_nol_calc.R"); src("3_decomposition.R"); src("5_factor_shares.R"); src("6_stress_scenarios.R")
 src("7_report_tables.R"); src("9_elasticities.R"); src("10_thresholds.R"); src("11_2008_replay.R"); src("12_tweaks.R")
+src("14_deck_charts.R")                                         # redraw the deck images so they always match the numbers below
 pc  <- function(x, d = 2) sprintf(paste0("%.", d, "f%%"), x)
 nolF <- setNames(nol_tbl$nol_a, nol_tbl$vintage); board <- setNames(nol_tbl$nol_in_force, nol_tbl$vintage)
 niM <- setNames(ann$ni_per_yr_M, ann$vintage); beM <- setNames(ann$breakeven_ni_M, ann$vintage)

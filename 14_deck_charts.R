@@ -1,5 +1,9 @@
 # 14_deck_charts.R ------------------------------------------------------------------------
-
+# The five chart images used in the executive deck (NOL_Executive_Deck_images.pptx), drawn in
+# base R from the pipeline's own objects, so they can be regenerated here when the data change.
+# Written to deck_images/. To refresh the deck without Node.js: open the .pptx, right-click each
+# chart image > Change Picture > pick the new file of the same name.
+# Requires scripts 1, 2, 3, 5, 6, 7 and 11 to have been run (run_all.R does this).
 
 dir.create("deck_images", showWarnings = FALSE)
 NAVY <- "#1F3A5F"; TEAL <- "#2A9D8F"; GOLD <- "#D9A441"; RED <- "#B23A48"; DGREY <- "#3C4048"; GREY <- "#6B7280"; LGRID <- "#E6E8EC"
@@ -72,6 +76,19 @@ bar3("c5_losses.png", c("Assumed\n(2026 model)", "2009 actual", "2010 actual"), 
      "Not a stress: insurance losses, bp of insured shares per year", 12.5)
 bar3("c5_growth.png", c("Assumed\n(2026 model)", "2009 actual", "2020 actual"), c(g_26, hist_growth), RED, "%.1f%%",
      "Insured-share growth, % per year", 24)
+
+## c5 combined: both "assumed vs history" panels in one image (used by the R Markdown deck) ---------------------
+open_png("c5_assumed.png", 5.5, 3.9); layout(matrix(1:2, 2)); 
+for (k in 1:2) {
+  base_par(c(2.6, 0.6, 2.0, 0.4)); par(yaxs = "i")
+  vals <- if (k == 1) c(loss_bp_26, hist_losses) else c(g_26, hist_growth); ymax <- if (k == 1) 12.5 else 24; col <- if (k == 1) GOLD else RED
+  labels <- if (k == 1) c("Assumed\n(2026 model)", "2009 actual", "2010 actual") else c("Assumed\n(2026 model)", "2009 actual", "2020 actual")
+  bp <- barplot(vals, col = col, border = NA, ylim = c(0, ymax), axes = FALSE, names.arg = NA, width = 0.55, space = 0.8)
+  axis(1, at = bp, labels = labels, lwd = 0, padj = 0.4, cex.axis = 0.78); abline(h = 0, col = "#C9CDD3")
+  text(bp, vals + ymax * 0.03, sprintf(if (k == 1) "%.1f" else "%.1f%%", vals), adj = c(0.5, 0), cex = 0.85, font = 2, col = DGREY)
+  mtext(if (k == 1) "Not a stress: insurance losses, bp of insured shares per year" else "Insured-share growth, % per year", side = 3, line = 0.5, adj = 0, cex = 0.85, col = DGREY)
+}
+dev.off()
 
 ## c6: NOL implied by the stress scenarios (trough basis; current scenario on the formula) --------------
 pick <- function(pattern) stress$nol[grepl(pattern, stress$scenario)][1]

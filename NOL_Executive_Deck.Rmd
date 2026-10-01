@@ -1,0 +1,141 @@
+---
+title: "Why the Share Insurance Fund's Normal Operating Level fell to the floor"
+subtitle: "— and what the number is no longer measuring"
+author: "Office of the Chief Economist · Executive briefing"
+date: "`r format(Sys.Date(), '%B %Y')`"
+output:
+  powerpoint_presentation:
+    reference_doc: nol_deck_reference.pptx
+    slide_level: 2
+---
+
+```{r setup, include=FALSE}
+# Numbers come from the pipeline; charts from 14_deck_charts.R (deck_images/). Knit from the NOL_analysis folder
+# after run_all.R. Only rmarkdown/knitr and the pandoc bundled with RStudio are needed.
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+src <- function(f) invisible(capture.output(source(f, encoding = "UTF-8")))
+src("1_load_panel.R"); src("2_nol_calc.R"); src("3_decomposition.R"); src("5_factor_shares.R"); src("6_stress_scenarios.R")
+src("7_report_tables.R"); src("9_elasticities.R"); src("10_thresholds.R"); src("11_2008_replay.R"); src("12_tweaks.R")
+pc  <- function(x, d = 2) sprintf(paste0("%.", d, "f%%"), x)
+nolF <- setNames(nol_tbl$nol_a, nol_tbl$vintage); board <- setNames(nol_tbl$nol_in_force, nol_tbl$vintage)
+niM <- setNames(ann$ni_per_yr_M, ann$vintage); beM <- setNames(ann$breakeven_ni_M, ann$vintage)
+sh <- shareA3                                                   # three-driver shares, rows = vintages
+thr13 <- thr[thr$`Target NOL` == "1.33%", ]
+pick <- function(pattern) stress$nol[grepl(pattern, stress$scenario)][1]
+ladder_rng <- range(ladder$s6_concentration)
+sw_y_share <- 100 * (swap[4] - swap[1]) / (swap[7] - swap[1])  # yield path share of the 2022->2026 swing
+el20 <- elas[elas$vintage == 2020, ]; el26 <- elas[elas$vintage == 2026, ]
+r2008 <- rep2008$nol_to_trough[grepl("all three combined", rep2008$case)]
+```
+
+## The formula's NOL has fallen to the 1.20% floor while the Board has held 1.33%
+
+:::::::::::::: {.columns}
+::: {.column width="60%"}
+![](deck_images/c2_nol.png)
+:::
+::: {.column width="40%"}
+**`r pc(nolF["2022"])`** — 2022: the formula matched what the Board set
+
+**`r pc(nolF["2026"])`** — 2025 and 2026: on the statutory floor; the projected ratio no longer falls
+
+**`r pc(board["2026"])`** — the level the Board has kept in force since 2022
+
+*NOL = 1.20% + the projected five-year fall in the Fund's equity ratio under an adverse scenario*
+:::
+::::::::::::::
+
+::: notes
+The formula produced `r pc(nolF["2020"])` in 2020, `r pc(nolF["2021"])`–`r pc(nolF["2022"])` in 2021–22, then slid: `r pc(nolF["2023"])`, `r pc(nolF["2024"])`, and the floor in both 2025 and 2026. The Board has held 1.33% throughout. The gap is the subject of this deck.
+:::
+
+## Why the ratio is projected to rise: the Fund now earns more than it needs to keep pace with share growth
+
+:::::::::::::: {.columns}
+::: {.column width="58%"}
+![](deck_images/c3_ni.png)
+:::
+::: {.column width="42%"}
+- **Share growth — steady pressure.** Insured shares grow 5–8% a year in every projection; each new dollar insured needs a third of a cent of retained earnings, about `r kn$be_2026` a year today.
+- **Insurance losses — tiny and shrinking.** Assumed at a ten-year average excluding Melrose: `r kn$loss_M_26` a year, `r kn$loss_bp_26` of a basis point of insured shares.
+- **Investment yield — what changed.** The bond ladder repriced from 1.2% to 3.6%; net income went from about zero in 2022–23 to `r kn$ni_2026` a year, above the threshold — so the ratio climbs and the cushion vanishes.
+:::
+::::::::::::::
+
+::: notes
+The equity ratio erodes whenever retained earnings grow more slowly than insured shares. Through 2023 projected net income was negative or near zero, so the ratio fell and the formula added a cushion. From 2025 net income is projected far above the break-even because maturing low-yield bonds are reinvested at today's rates and the budget was cut. Share growth and losses did not change the picture.
+:::
+
+## Why it worked until 2024: the three drivers were balanced — since then yield has taken over
+
+:::::::::::::: {.columns}
+::: {.column width="62%"}
+![](deck_images/c4_drivers.png)
+:::
+::: {.column width="38%"}
+**Balanced, then not.** Until 2023 yield, losses and share growth each carried roughly a third of the arithmetic. With earnings near zero the ratio fell, the formula produced a 10–14 bp cushion, and the result looked sensible next to the Board's 1.33%.
+
+**It was never tested.** The scenario's mildness did not matter while low earnings did the work. Once yields doubled, the same scenario produced a rising ratio and the cushion vanished — nothing about credit-union risk had changed.
+
+**`r sprintf("%.0f%%", sh["2026", "Investment yield"])`** of the arithmetic is yield in 2026 (`r sprintf("%.0f%%", sh["2020", "Investment yield"])` in 2020); losses are down to `r sprintf("%.0f%%", sh["2026", "Insurance losses"])`.
+:::
+::::::::::::::
+
+::: notes
+The chart splits the combined effect of the three named drivers on the projected five-year change in the equity ratio. In 2021 losses and yield mattered almost equally. By 2026 yield accounts for two-thirds, losses for `r sprintf("%.0f%%", sh["2026", "Insurance losses"])`. The crossover is 2024 — the year the NOL started sliding toward the floor.
+:::
+
+## What the methodology misses
+
+:::::::::::::: {.columns}
+::: {.column width="55%"}
+![](deck_images/c5_assumed.png)
+:::
+::: {.column width="45%"}
+1. **It measures a decline, not a buffer.** When the ratio is projected to rise the cushion is zero, whatever the risk. In 2026 the first `r kn$dead_2026` bp of bad news do not register; 1.33% would take $`r thr13[["Losses per year 2027-31 ($M)"]]`M a year of losses or `r thr13[["Avg share growth 2027-31 (%/yr)"]]`% share growth for five years.
+2. **It is procyclical by design.** The NOL falls when rates rise and the budget is cut; it would rise in a downturn, when premiums are hardest. Anything above the NOL is paid out, so good years' earnings leave.
+3. **Mechanical artifacts.** Deposit true-up timing supplied a fifth of the 2022 add-on; budget inputs carry forward unchecked; deposit inflows earn nothing in the model.
+:::
+::::::::::::::
+
+::: notes
+Four limitations. The scenario is built from recent history — losses as a ten-year average excluding Melrose, share growth as a three-year average plus one standard deviation — so it can only be as severe as the last few years; the Fund's real stresses (1991, 2009–10, 2020) were far larger. The formula reads only the projected fall, so it goes blind once the ratio rises. It moves with interest rates and the agency's own budget rather than with risk, and the mandatory distribution above the NOL means a floor-level NOL in a strong year pays out the earnings that should be kept.
+:::
+
+## Remedies: anchor the target to what can go wrong, not to what is projected to go right
+
+:::::::::::::: {.columns}
+::: {.column width="56%"}
+![](deck_images/c6_stress.png)
+:::
+::: {.column width="44%"}
+**Within the same framework, six small changes**
+
+- Measure to the lowest point, not the end point
+- Start from the trued-up June ratio
+- No reinvestment windfall in an adverse case
+- Recession-consistent share growth (12% in year one)
+- Losses from history, not a ten-year average
+- A fixed component for one large failure (5 bp)
+
+**Result: `r pc(ladder_rng[1])`–`r pc(ladder_rng[2])` every year since 2020**, `r pc(ladder$s6_concentration[ladder$vintage == 2026])` for 2026.
+
+*FDIC's rule: a 2% target set from past crises, steady rates, no payouts below it.*
+:::
+::::::::::::::
+
+::: notes
+Run the Fund's own history through the same model and the answer is `r pc(pick("^2020-style"))`–`r pc(pick("12 bp/yr"))`: a 2020-style surge alone gives `r pc(pick("^2020-style"))`, a loss wave or a single large failure `r pc(pick("6 bp/yr"))`–`r pc(pick("12 bp/yr"))`, and an approximate replay of 2008–10 gives `r pc(r2008)` even without the corporate losses. Six changes within the existing framework produce `r pc(ladder_rng[1])`–`r pc(ladder_rng[2])` across all years.
+:::
+
+## Three things to take away
+
+1. **Richer, not safer.** The NOL fell because the Fund became more profitable: about `r sprintf("%.0f%%", sw_y_share)` of the swing from 2022 is the interest-rate environment and most of the rest the agency's own budget; assumed losses stayed at a third of a basis point.
+2. **More exposed, less sensitive.** A point of share growth or of yield moves the ratio more today than in 2020 (`r sprintf("%.1f", el20$ER_share_g_1pp)` → `r sprintf("%.1f", el26$ER_share_g_1pp)` bp; `r sprintf("%+.1f", el20$ER_yield_100bp)` → `r sprintf("%+.1f", el26$ER_yield_100bp)` bp). Yet the formula no longer responds to any of them until a stress-sized shock arrives.
+3. **History says 1.35–1.45%.** A 2020-style surge, a 2009-type loss wave or one large failure replayed on today's Fund land at `r pc(pick("^2020-style"))`–`r pc(pick("12 bp/yr"))`; 2008 replayed gives `r pc(r2008)`. The 1.33% in force is what a modest stress produces — not a conservative number.
+
+*For the model owners: the last projected column is missing from the printed copies; deposit inflows earn nothing in the sheet although the documentation says they are invested; the 2025 run carries a −18% budget input into every year; the 2024 sheet's 2025 budget cell reverts to 2024; the 2026 workbook already holds a minimum-over-five-years calculation.*
+
+::: notes
+Closing: the Fund is stronger and more exposed at the same time, and the number meant to track that exposure has stopped responding. Anchor the target to history, keep the agency's budget and projected profits out of it, and let good years build the reserve for bad ones.
+:::

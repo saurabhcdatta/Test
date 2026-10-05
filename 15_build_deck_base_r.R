@@ -2,16 +2,16 @@
 # The executive deck, drawn entirely in base R: every slide (title bar, callouts, coloured dots,
 # cards, badges, the dark title and closing slides, speaker notes) is written here as PowerPoint
 # XML, filled with the pipeline's numbers and the chart images from 14_deck_charts.R, and zipped
-# into NOL_Executive_Deck_R.pptx. deck_skeleton.zip holds only the theme, master, layout and
-# notes master. No packages, no rmarkdown, no zip program: memCompress() supplies the deflate
-# stream and a small CRC-32 routine the checksum.
+# into NOL_Executive_Deck_R.pptx. The theme, slide master, layout and notes master are written
+# by the script too (block 4), so nothing but this file and deck_images/ is needed. No packages,
+# no rmarkdown, no zip program: memCompress() supplies the deflate stream and a small CRC-32
+# routine the checksum.
 # Requires scripts 1-3, 5-7, 9-12 and 14 to have been run (run_all.R does this).
 # To change wording, edit the slide definitions in block 3; positions are inches on a 10 x 5.625 slide.
 
-## 0. pre-flight: skeleton and chart images in place -----------------------------------------------------------
-# The deck needs deck_skeleton.zip (shipped with the package) beside this script, and the images that the
-# CURRENT 14_deck_charts.R draws into deck_images/. An older 14_deck_charts.R does not draw c7_ladder.png.
-if (!file.exists("deck_skeleton.zip")) stop("deck_skeleton.zip is not in ", normalizePath(getwd()), " - copy it from the package next to this script.")
+## 0. pre-flight: the chart images in place -----------------------------------------------------------
+# The deck needs the images that the CURRENT 14_deck_charts.R draws into deck_images/ (an older
+# 14_deck_charts.R does not draw c7_ladder.png).
 if (!file.exists("14_deck_charts.R") || !any(grepl("c7_ladder", readLines("14_deck_charts.R", warn = FALSE))))
   stop("14_deck_charts.R is missing or an older version (it does not draw deck_images/c7_ladder.png) - replace it with the current one from the package.")
 need_img <- file.path("deck_images", paste0(c("c2_nol", "c3_ni", "c4_drivers", "c5_losses", "c5_growth", "c7_ladder"), ".png"))
@@ -181,41 +181,70 @@ slides[[7]] <- list(bg = NAVY, images = NULL, shapes = c(
 
 ## 4. assemble the package ----------------------------------------------------------------------------------------
 NS <- 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
-tmp <- file.path(tempdir(), "deck_r"); unlink(tmp, recursive = TRUE); dir.create(tmp)
-unzip("deck_skeleton.zip", exdir = tmp)
-for (d in c("ppt/slides/_rels", "ppt/notesSlides/_rels", "ppt/media", "ppt/_rels")) dir.create(file.path(tmp, d), recursive = TRUE, showWarnings = FALSE)
+XH <- '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+tmp <- file.path(tempdir(), "deck_r"); unlink(tmp, recursive = TRUE)
+for (d in c("_rels", "docProps", "ppt/_rels", "ppt/slides/_rels", "ppt/notesSlides/_rels", "ppt/media", "ppt/theme", "ppt/slideMasters/_rels", "ppt/slideLayouts/_rels", "ppt/notesMasters/_rels"))
+  dir.create(file.path(tmp, d), recursive = TRUE, showWarnings = FALSE)
 wfile <- function(path, x) writeLines(enc2utf8(x), file.path(tmp, path), useBytes = TRUE)
+rel <- function(id, type, target) sprintf('<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/%s" Target="%s"/>', id, type, target)
+rels <- function(...) sprintf('%s<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">%s</Relationships>', XH, paste(c(...), collapse = ""))
+empty_tree <- '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>'
+clrmap <- '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>'
+# -- the fixed parts: theme, slide master, blank layout, notes master, properties
+theme_xml <- paste0(XH, '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="OCE"><a:themeElements>',
+  '<a:clrScheme name="OCE"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F3A5F"/></a:dk2><a:lt2><a:srgbClr val="E8EEF4"/></a:lt2><a:accent1><a:srgbClr val="1F3A5F"/></a:accent1><a:accent2><a:srgbClr val="2A9D8F"/></a:accent2><a:accent3><a:srgbClr val="D9A441"/></a:accent3><a:accent4><a:srgbClr val="B23A48"/></a:accent4><a:accent5><a:srgbClr val="6B7280"/></a:accent5><a:accent6><a:srgbClr val="6C8EBF"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme>',
+  '<a:fontScheme name="OCE"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>',
+  '<a:fmtScheme name="OCE"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>',
+  '<a:lnStyleLst><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst>',
+  '<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>',
+  '<a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme>',
+  '</a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/></a:theme>')
+wfile("ppt/theme/theme1.xml", theme_xml); wfile("ppt/theme/theme2.xml", theme_xml)     # each master gets its own theme part, as PowerPoint expects
+wfile("ppt/slideMasters/slideMaster1.xml", sprintf('%s<p:sldMaster %s><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>%s</p:spTree></p:cSld>%s<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr sz="4400"/></a:lvl1pPr></p:titleStyle><p:bodyStyle><a:lvl1pPr><a:defRPr sz="2800"/></a:lvl1pPr></p:bodyStyle><p:otherStyle><a:lvl1pPr><a:defRPr sz="1800"/></a:lvl1pPr></p:otherStyle></p:txStyles></p:sldMaster>', XH, NS, empty_tree, clrmap))
+wfile("ppt/slideMasters/_rels/slideMaster1.xml.rels", rels(rel(1, "slideLayout", "../slideLayouts/slideLayout1.xml"), rel(2, "theme", "../theme/theme1.xml")))
+wfile("ppt/slideLayouts/slideLayout1.xml", sprintf('%s<p:sldLayout %s type="blank" preserve="1"><p:cSld name="Blank">%s</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>', XH, NS, empty_tree))
+wfile("ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels(rel(1, "slideMaster", "../slideMasters/slideMaster1.xml")))
+wfile("ppt/notesMasters/notesMaster1.xml", sprintf('%s<p:notesMaster %s><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>%s<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg" idx="2"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="1143000" y="685800"/><a:ext cx="4572000" cy="2571750"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln w="12700"><a:solidFill><a:prstClr val="black"/></a:solidFill></a:ln></p:spPr></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" sz="quarter" idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="3429000"/><a:ext cx="5486400" cy="4800600"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp></p:spTree></p:cSld>%s<p:notesStyle><a:lvl1pPr marL="0" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:defRPr sz="1200" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl1pPr></p:notesStyle></p:notesMaster>', XH, NS, empty_tree, clrmap))
+wfile("ppt/notesMasters/_rels/notesMaster1.xml.rels", rels(rel(1, "theme", "../theme/theme2.xml")))
+wfile("ppt/presProps.xml", sprintf('%s<p:presentationPr %s/>', XH, NS))
+wfile("ppt/viewProps.xml", sprintf('%s<p:viewPr %s><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:gridSpacing cx="76200" cy="76200"/></p:viewPr>', XH, NS))
+wfile("ppt/tableStyles.xml", paste0(XH, '<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"/>'))
+wfile("docProps/app.xml", paste0(XH, '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Microsoft Office PowerPoint</Application><PresentationFormat>Widescreen</PresentationFormat><Slides>', length(slides), '</Slides><Notes>', length(slides), '</Notes><Company>NCUA Office of the Chief Economist</Company></Properties>'))
+stamp <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+wfile("docProps/core.xml", sprintf('%s<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>NCUSIF Normal Operating Level</dc:title><dc:creator>Office of the Chief Economist</dc:creator><cp:lastModifiedBy>Office of the Chief Economist</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">%s</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">%s</dcterms:modified></cp:coreProperties>', XH, stamp, stamp))
+wfile("_rels/.rels", rels('<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>',
+  '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>',
+  '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'))
+# -- the slides, their relationships, notes and images
 media_n <- 0L
 for (i in seq_along(slides)) {
   s <- slides[[i]]
-  rels <- character(0)
+  srels <- character(0)
   for (k in seq_along(s$images)) { media_n <- media_n + 1L; mf <- sprintf("image%d.png", media_n); file.copy(s$images[k], file.path(tmp, "ppt/media", mf), overwrite = TRUE)
-    rels <- c(rels, sprintf('<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/%s"/>', k, mf)) }
+    srels <- c(srels, rel(k, "image", paste0("../media/", mf))) }
   nk <- length(s$images)
-  rels <- c(rels, sprintf('<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>', nk + 1),
-                  sprintf('<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide%d.xml"/>', nk + 2, i))
+  srels <- c(srels, rel(nk + 1, "slideLayout", "../slideLayouts/slideLayout1.xml"), rel(nk + 2, "notesSlide", sprintf("../notesSlides/notesSlide%d.xml", i)))
   bg <- if (is.null(s$bg)) "" else sprintf('<p:bg><p:bgPr><a:solidFill><a:srgbClr val="%s"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>', s$bg)
   wfile(sprintf("ppt/slides/slide%d.xml", i), sprintf('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:sld %s><p:cSld name="Slide %d">%s<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>%s</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>',
     NS, i, bg, paste(s$shapes, collapse = "")))
-  wfile(sprintf("ppt/slides/_rels/slide%d.xml.rels", i), sprintf('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">%s</Relationships>', paste(rels, collapse = "")))
+  wfile(sprintf("ppt/slides/_rels/slide%d.xml.rels", i), rels(srels))
   wfile(sprintf("ppt/notesSlides/notesSlide%d.xml", i), sprintf('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<p:notes %s><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr><p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>%s</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>',
     NS, esc(s$notes)))
-  wfile(sprintf("ppt/notesSlides/_rels/notesSlide%d.xml.rels", i), sprintf('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide%d.xml"/></Relationships>', i))
+  wfile(sprintf("ppt/notesSlides/_rels/notesSlide%d.xml.rels", i), rels(rel(1, "notesMaster", "../notesMasters/notesMaster1.xml"), rel(2, "slide", sprintf("../slides/slide%d.xml", i))))
 }
 n <- length(slides)
-# presentation.xml: the skeleton's, with the slide list rewritten
-pres <- paste(readLines(file.path(tmp, "ppt/presentation.xml"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-pres <- sub("<p:sldIdLst>.*?</p:sldIdLst>", paste0("<p:sldIdLst>", paste(sprintf('<p:sldId id="%d" r:id="rId%d"/>', 255 + seq_len(n), 1 + seq_len(n)), collapse = ""), "</p:sldIdLst>"), pres, perl = TRUE)
-pres <- sub('<p:notesMasterIdLst><p:notesMasterId r:id="rId[0-9]+"/></p:notesMasterIdLst>', sprintf('<p:notesMasterIdLst><p:notesMasterId r:id="rId%d"/></p:notesMasterIdLst>', n + 2), pres)
-wfile("ppt/presentation.xml", pres)
-wfile("ppt/_rels/presentation.xml.rels", sprintf('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>%s<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/><Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps" Target="presProps.xml"/><Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps" Target="viewProps.xml"/><Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/><Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles" Target="tableStyles.xml"/></Relationships>',
-  paste(sprintf('<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide%d.xml"/>', 1 + seq_len(n), seq_len(n)), collapse = ""), n + 2, n + 3, n + 4, n + 5, n + 6))
+# presentation.xml and its relationships
+wfile("ppt/presentation.xml", sprintf('%s<p:presentation %s saveSubsetFonts="1"><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:notesMasterIdLst><p:notesMasterId r:id="rId%d"/></p:notesMasterIdLst><p:sldIdLst>%s</p:sldIdLst><p:sldSz cx="9144000" cy="5143500"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle><a:defPPr><a:defRPr lang="en-US"/></a:defPPr><a:lvl1pPr marL="0" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:defRPr sz="1800" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl1pPr></p:defaultTextStyle></p:presentation>',
+  XH, NS, n + 2, paste(sprintf('<p:sldId id="%d" r:id="rId%d"/>', 255 + seq_len(n), 1 + seq_len(n)), collapse = "")))
+wfile("ppt/_rels/presentation.xml.rels", rels(rel(1, "slideMaster", "slideMasters/slideMaster1.xml"), vapply(seq_len(n), function(i) rel(1 + i, "slide", sprintf("slides/slide%d.xml", i)), ""),
+  rel(n + 2, "notesMaster", "notesMasters/notesMaster1.xml"), rel(n + 3, "presProps", "presProps.xml"), rel(n + 4, "viewProps", "viewProps.xml"), rel(n + 5, "theme", "theme/theme1.xml"), rel(n + 6, "tableStyles", "tableStyles.xml")))
 ct <- c('<Default Extension="xml" ContentType="application/xml"/>', '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>', '<Default Extension="png" ContentType="image/png"/>',
   '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>',
   '<Override PartName="/ppt/presProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presProps+xml"/>',
   '<Override PartName="/ppt/viewProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml"/>',
   '<Override PartName="/ppt/tableStyles.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml"/>',
   '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>',
+  '<Override PartName="/ppt/theme/theme2.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>',
   '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>',
   '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>',
   '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>',
@@ -223,7 +252,7 @@ ct <- c('<Default Extension="xml" ContentType="application/xml"/>', '<Default Ex
   sprintf('<Override PartName="/ppt/notesSlides/notesSlide%d.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>', seq_len(n)),
   '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
   '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>')
-wfile("[Content_Types].xml", sprintf('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">%s</Types>', paste(ct, collapse = "")))
+wfile("[Content_Types].xml", sprintf('%s<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">%s</Types>', XH, paste(ct, collapse = "")))
 
 ## 5. write the .pptx (zip) with base R ----------------------------------------------------------------------------
 crc_table <- vapply(0:255, function(k) { c <- k; for (j in 1:8) c <- if (bitwAnd(c, 1L)) bitwXor(-306674912L, bitwShiftR(c, 1L)) else bitwShiftR(c, 1L); c }, 1L)
@@ -244,4 +273,4 @@ write_zip <- function(root, out) {
   w4(0x06054b50L); w2(0L); w2(0L); w2(length(central)); w2(length(central)); w4(offset - cd_start); w4(cd_start); w2(0L); invisible(out) }
 write_zip(tmp, "NOL_Executive_Deck_R.pptx")
 cat("written NOL_Executive_Deck_R.pptx:", n, "slides,", round(file.info("NOL_Executive_Deck_R.pptx")$size / 1024), "KB\n")
-rm(r, tx, rich, txbox, para, run_xml, shape, rbox, oval, hline, pic, png_dims, dot, stat, footer, title_bar, nid, .id, emu, esc, wfile, slides, tmp)   # leave no helpers behind that could mask graphics functions
+rm(r, tx, rich, txbox, para, run_xml, shape, rbox, oval, hline, pic, png_dims, dot, stat, footer, title_bar, nid, .id, emu, esc, wfile, rel, rels, slides, tmp, empty_tree, clrmap, XH, theme_xml)   # leave no helpers behind that could mask graphics functions

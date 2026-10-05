@@ -21,7 +21,7 @@ abline(h = 1.20, col = RED, lty = 2); text(2020.05, 1.196, "statutory floor", co
 lines(vints, board, col = GOLD, lwd = 2.6, type = "b", pch = 19, cex = 0.9)
 lines(vints, nol_tbl$nol_a, col = NAVY, lwd = 3, type = "b", pch = 19, cex = 1.05)
 above <- nol_tbl$nol_a <= 1.27 | vints == 2020
-text(vints, nol_tbl$nol_a + ifelse(above, 0.013, -0.016), sprintf("%.2f%%", nol_tbl$nol_a), col = NAVY, cex = 0.78, font = 2)
+text(vints, nol_tbl$nol_a + ifelse(above, 0.013, -0.016), sprintf("%.3f%%", nol_tbl$nol_a), col = NAVY, cex = 0.74, font = 2)
 legend("topright", legend = c("NOL set by the Board", "NOL implied by the formula"), col = c(GOLD, NAVY), lwd = c(2.6, 3), pch = 19, bty = "n", cex = 0.8, text.col = DGREY)
 mtext("NOL by model year (June data)", side = 3, line = 0.6, adj = 0, cex = 0.95, col = DGREY)
 dev.off()
@@ -61,7 +61,7 @@ polygon(c(vints, rev(vints)), c(rep(0, 7), rev(y1)), col = TEAL, border = NA)
 polygon(c(vints, rev(vints)), c(y1, rev(y2)), col = GOLD, border = NA)
 polygon(c(vints, rev(vints)), c(y2, rev(y3)), col = adjustcolor(RED, 0.92), border = NA)
 lines(vints, y1, col = "white", lwd = 1.5); lines(vints, y2, col = "white", lwd = 1.5); abline(h = c(25, 50, 75), col = adjustcolor("white", 0.5), lwd = 0.7)
-axis(1, at = vints, labels = sprintf("%d\n%.2f%%", vints, nol_tbl$nol_a), lwd = 0, padj = 0.5, cex.axis = 0.78)
+axis(1, at = vints, labels = sprintf("%d\n%.3f%%", vints, nol_tbl$nol_a), lwd = 0, padj = 0.5, cex.axis = 0.74)
 axis(2, at = seq(0, 100, 25), labels = paste0(seq(0, 100, 25), "%"), las = 1, lwd = 0)
 lab3 <- function(y, txt, col, cex) { for (i in 1:7) text(vints[i] + c(0.06, rep(0, 5), -0.06)[i], y[i], txt[i], col = col[i], font = 2, cex = cex[i], adj = c(c(0, rep(0.5, 5), 1)[i], 0.5)) }
 lab3(y1 / 2, sprintf("%.0f%%", sy), rep("white", 7), rep(0.85, 7))
@@ -145,7 +145,7 @@ if (exists("ladder")) {
   for (i in 1:8) mtext(steps[i], side = 1, at = i, line = 1.9, cex = 0.62, col = DGREY)
   mtext("NOL", side = 1, at = 0.3, line = 3.15, cex = 0.62, col = GREY, adj = 1, font = 3)
   for (i in 1:8) mtext(sprintf("%.2f%%", lev[c(1:7, 7)][i]), side = 1, at = i, line = 3.15, cex = 0.68, font = 2, col = c(GREY, rep(NAVY, 3), rep(MID, 3), TEAL)[i])
-  mtext(sprintf("Seven model years: %.2f\u2013%.2f%% (a %.0f bp range) vs %.2f\u2013%.2f%% (%.0f bp) today",
+  mtext(sprintf("Seven model years: %.2f\u2013%.2f%% (a %.0f bp range) vs %.3f\u2013%.3f%% (%.0f bp) today",
                 min(ladder$s6_concentration), max(ladder$s6_concentration), 100 * diff(range(ladder$s6_concentration)), min(ladder$s0_current), max(ladder$s0_current), 100 * diff(range(ladder$s0_current))),
         side = 1, line = 4.6, adj = 0, at = 0.4, cex = 0.7, font = 2, col = NAVY)
   mtext(sprintf("The Fund's own history replayed through the same model: %.2f\u2013%.2f%%", min(stress$nol[-1]), max(stress$nol[-1])),

@@ -8,6 +8,18 @@
 # Requires scripts 1-3, 5-7, 9-12 and 14 to have been run (run_all.R does this).
 # To change wording, edit the slide definitions in block 3; positions are inches on a 10 x 5.625 slide.
 
+## 0. pre-flight: skeleton and chart images in place -----------------------------------------------------------
+# The deck needs deck_skeleton.zip (shipped with the package) beside this script, and the images that the
+# CURRENT 14_deck_charts.R draws into deck_images/. An older 14_deck_charts.R does not draw c7_ladder.png.
+if (!file.exists("deck_skeleton.zip")) stop("deck_skeleton.zip is not in ", normalizePath(getwd()), " - copy it from the package next to this script.")
+if (!file.exists("14_deck_charts.R") || !any(grepl("c7_ladder", readLines("14_deck_charts.R", warn = FALSE))))
+  stop("14_deck_charts.R is missing or an older version (it does not draw deck_images/c7_ladder.png) - replace it with the current one from the package.")
+need_img <- file.path("deck_images", paste0(c("c2_nol", "c3_ni", "c4_drivers", "c5_losses", "c5_growth", "c7_ladder"), ".png"))
+if (any(!file.exists(need_img))) {
+  message("deck images missing or stale (", paste(basename(need_img[!file.exists(need_img)]), collapse = ", "), ") - drawing them with 14_deck_charts.R")
+  source("14_deck_charts.R")
+}
+
 ## 1. numbers from the pipeline --------------------------------------------------------------------
 pc <- function(x, d = 2) sprintf(paste0("%.", d, "f%%"), x)
 L26 <- ladder[ladder$vintage == 2026, ]; el20 <- elas[elas$vintage == 2020, ]; el26 <- elas[elas$vintage == 2026, ]
@@ -232,4 +244,4 @@ write_zip <- function(root, out) {
   w4(0x06054b50L); w2(0L); w2(0L); w2(length(central)); w2(length(central)); w4(offset - cd_start); w4(cd_start); w2(0L); invisible(out) }
 write_zip(tmp, "NOL_Executive_Deck_R.pptx")
 cat("written NOL_Executive_Deck_R.pptx:", n, "slides,", round(file.info("NOL_Executive_Deck_R.pptx")$size / 1024), "KB\n")
-rm(r, tx, rich, txbox, para, run_xml, shape, rbox, oval, hline, pic, png_dims, dot, stat, footer, title_bar, nid, .id, emu, esc, wfile, w, slides, tmp)   # leave no helpers behind that could mask graphics functions
+rm(r, tx, rich, txbox, para, run_xml, shape, rbox, oval, hline, pic, png_dims, dot, stat, footer, title_bar, nid, .id, emu, esc, wfile, slides, tmp)   # leave no helpers behind that could mask graphics functions

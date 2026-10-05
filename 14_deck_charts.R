@@ -26,17 +26,30 @@ legend("topright", legend = c("NOL set by the Board", "NOL implied by the formul
 mtext("NOL by model year (June data)", side = 3, line = 0.6, adj = 0, cex = 0.95, col = DGREY)
 dev.off()
 
-## c3: net income vs the break-even --------------------------------------------------------------
-ni <- ann$ni_per_yr_M; be <- ann$breakeven_ni_M
-open_png("c3_ni.png", 5.6, 3.6); base_par(c(3.0, 3.8, 2.2, 0.6))
+## c3: net income vs the break-even, and what it does to the ratio (two panels) --------------------------------
+ni <- ann$ni_per_yr_M; be <- ann$breakeven_ni_M; d_er <- decomp$total_bp              # five-year change in the ratio, bp
+open_png("c3_ni.png", 5.6, 4.1); layout(matrix(1:2, 2), heights = c(1.15, 0.95))
+base_par(c(0.5, 3.8, 2.0, 0.6)); par(xaxs = "r")
 yl <- c(-300, 760)
 plot(NA, xlim = c(2019.5, 2026.5), ylim = yl, axes = FALSE, xlab = "", ylab = "")
-hgrid(seq(-200, 600, 200)); axis(1, at = vints, lwd = 0); axis(2, at = seq(-200, 600, 200), labels = format(seq(-200, 600, 200), big.mark = ","), las = 1, lwd = 0)
+hgrid(seq(-200, 600, 200)); axis(2, at = seq(-200, 600, 200), labels = format(seq(-200, 600, 200), big.mark = ","), las = 1, lwd = 0)
 rect(vints - 0.3, pmin(ni, 0), vints + 0.3, pmax(ni, 0), col = ifelse(ni < 0, RED, TEAL), border = NA); abline(h = 0, col = "#C9CDD3")
 lines(vints, be, col = NAVY, lwd = 3, type = "b", pch = 18, cex = 1.4)
-text(vints, ni + ifelse(ni >= 0, 28, -30), sprintf("%+.0f", ni), cex = 0.72, col = DGREY)
-legend("topleft", legend = c("Projected net income", "Needed to hold the ratio steady"), fill = c(TEAL, NA), border = NA, col = c(NA, NAVY), lwd = c(NA, 3), pch = c(NA, 18), bty = "n", cex = 0.8, text.col = DGREY)
-mtext("$ millions per year, five-year projection window", side = 3, line = 0.6, adj = 0, cex = 0.95, col = DGREY)
+text(vints, ni + ifelse(ni >= 0, 28, -30), sprintf("%+.0f", ni), cex = 0.7, col = DGREY)
+legend("topleft", legend = c("Projected net income", "Needed to hold the ratio steady"), fill = c(TEAL, NA), border = NA, col = c(NA, NAVY), lwd = c(NA, 3), pch = c(NA, 18), bty = "n", cex = 0.78, text.col = DGREY)
+mtext("Net income vs. the amount needed to keep pace with share growth, $M a year", side = 3, line = 0.5, adj = 0, cex = 0.82, col = DGREY)
+base_par(c(2.4, 3.8, 1.5, 0.6))
+yl2 <- c(min(-18, floor(min(d_er)) - 4), max(8, ceiling(max(d_er)) + 4))
+plot(NA, xlim = c(2019.5, 2026.5), ylim = yl2, axes = FALSE, xlab = "", ylab = "")
+hgrid(pretty(yl2)); axis(2, at = pretty(yl2), labels = sprintf("%+d bp", as.integer(pretty(yl2))), las = 1, lwd = 0, cex.axis = 0.78)
+rect(vints - 0.3, pmin(d_er, 0), vints + 0.3, pmax(d_er, 0), col = ifelse(d_er < 0, RED, TEAL), border = NA); abline(h = 0, col = "#C9CDD3")
+neg <- d_er < 0
+text(vints[neg], d_er[neg] - 1.0, sprintf("%+.0f", d_er[neg]), cex = 0.7, font = 2, col = RED, adj = c(0.5, 1))
+text(vints[!neg], d_er[!neg] + 1.0, sprintf("%+.0f", d_er[!neg]), cex = 0.7, font = 2, col = TEAL, adj = c(0.5, 0))
+axis(1, at = vints, lwd = 0, cex.axis = 0.85)
+text(2022, 4.2, "ratio falls \u2192 the formula adds a cushion", col = RED, cex = 0.66, adj = c(0.5, 0))
+text(2025.5, -5, "ratio rises \u2192 the formula\nadds nothing", col = TEAL, cex = 0.66, adj = c(0.5, 1))
+mtext("What that does to the equity ratio: five-year change, basis points", side = 3, line = 0.3, adj = 0, cex = 0.82, col = DGREY)
 dev.off()
 
 ## c4: three-driver shares, stacked area -----------------------------------------------------------
@@ -66,28 +79,32 @@ loss_bp_26 <- 1e4 * wstat$losses_M_yr[wstat$vintage == 2026] * 1e6 / S0_26
 g_26 <- wstat$share_g_ann[wstat$vintage == 2026]
 hist_losses <- c(9.3, 10.1)      # 2009-10 insurance loss expense, bp of insured shares (NCUA Board bulletins)
 hist_growth <- c(10.5, 20.0)     # organic insured-share growth 2009 and 2020, % per year
-bar3 <- function(f, labels, vals, col, fmt, ttl, ymax) {
+bar3 <- function(f, labels, vals, col, fmt, ttl, ymax, note) {
   open_png(f, 4.3, 1.85); base_par(c(2.6, 0.6, 2.0, 0.4)); par(yaxs = "i")
-  bp <- barplot(vals, col = col, border = NA, ylim = c(0, ymax), axes = FALSE, names.arg = NA, width = 0.55, space = 0.8)
+  bp <- barplot(vals, col = c(adjustcolor(col, 0.55), col, col), border = NA, ylim = c(0, ymax), axes = FALSE, names.arg = NA, width = 0.55, space = 0.8)
   axis(1, at = bp, labels = labels, lwd = 0, padj = 0.4, cex.axis = 0.78); abline(h = 0, col = "#C9CDD3")
   text(bp, vals + ymax * 0.03, sprintf(fmt, vals), adj = c(0.5, 0), cex = 0.85, font = 2, col = DGREY)
+  text(bp[1], vals[1] + ymax * 0.22, note, col = DGREY, cex = 0.7, font = 3, adj = c(0.5, 0))
   mtext(ttl, side = 3, line = 0.5, adj = 0, cex = 0.85, col = DGREY); dev.off() }
-bar3("c5_losses.png", c("Assumed\n(2026 model)", "2009 actual", "2010 actual"), c(loss_bp_26, hist_losses), GOLD, "%.1f",
-     "Not a stress: insurance losses, bp of insured shares per year", 12.5)
-bar3("c5_growth.png", c("Assumed\n(2026 model)", "2009 actual", "2020 actual"), c(g_26, hist_growth), RED, "%.1f%%",
-     "Insured-share growth, % per year", 24)
+mult_L <- max(hist_losses) / loss_bp_26; mult_g <- max(hist_growth) / g_26
+bar3("c5_losses.png", c("Assumed in the\nadverse scenario", "2009 actual", "2010 actual"), c(loss_bp_26, hist_losses), GOLD, "%.1f",
+     "Insurance losses, basis points of insured shares per year", 12.5, sprintf("%.0fx smaller than\nthe 2009-10 actuals", mult_L))
+bar3("c5_growth.png", c("Assumed in the\nadverse scenario", "2009 actual", "2020 actual"), c(g_26, hist_growth), RED, "%.1f%%",
+     "Insured-share growth, % per year", 24, sprintf("%.1fx smaller than\nthe 2020 surge", mult_g))
 
 ## c5 combined: both "assumed vs history" panels in one image (used by the R Markdown deck) ---------------------
-open_png("c5_assumed.png", 5.5, 3.9); layout(matrix(1:2, 2)); 
+open_png("c5_assumed.png", 5.5, 4.1); layout(matrix(1:2, 2)); par(oma = c(0, 0, 1.6, 0))
 for (k in 1:2) {
-  base_par(c(2.6, 0.6, 2.0, 0.4)); par(yaxs = "i")
+  base_par(c(2.6, 0.6, 1.6, 0.4)); par(yaxs = "i")
   vals <- if (k == 1) c(loss_bp_26, hist_losses) else c(g_26, hist_growth); ymax <- if (k == 1) 12.5 else 24; col <- if (k == 1) GOLD else RED
-  labels <- if (k == 1) c("Assumed\n(2026 model)", "2009 actual", "2010 actual") else c("Assumed\n(2026 model)", "2009 actual", "2020 actual")
-  bp <- barplot(vals, col = col, border = NA, ylim = c(0, ymax), axes = FALSE, names.arg = NA, width = 0.55, space = 0.8)
-  axis(1, at = bp, labels = labels, lwd = 0, padj = 0.4, cex.axis = 0.78); abline(h = 0, col = "#C9CDD3")
+  labels <- if (k == 1) c("Assumed in the\nadverse scenario", "2009 actual", "2010 actual") else c("Assumed in the\nadverse scenario", "2009 actual", "2020 actual")
+  bp <- barplot(vals, col = c(adjustcolor(col, 0.55), col, col), border = NA, ylim = c(0, ymax), axes = FALSE, names.arg = NA, width = 0.55, space = 0.8)
+  axis(1, at = bp, labels = labels, lwd = 0, padj = 0.4, cex.axis = 0.76); abline(h = 0, col = "#C9CDD3")
   text(bp, vals + ymax * 0.03, sprintf(if (k == 1) "%.1f" else "%.1f%%", vals), adj = c(0.5, 0), cex = 0.85, font = 2, col = DGREY)
-  mtext(if (k == 1) "Not a stress: insurance losses, bp of insured shares per year" else "Insured-share growth, % per year", side = 3, line = 0.5, adj = 0, cex = 0.85, col = DGREY)
+  text(bp[1], vals[1] + ymax * 0.2, if (k == 1) sprintf("%.0fx smaller than\nthe 2009-10 actuals", mult_L) else sprintf("%.1fx smaller than\nthe 2020 surge", mult_g), col = DGREY, cex = 0.7, font = 3, adj = c(0.5, 0))
+  mtext(if (k == 1) "Insurance losses, basis points of insured shares per year" else "Insured-share growth, % per year", side = 3, line = 0.3, adj = 0, cex = 0.8, col = DGREY)
 }
+mtext("What the adverse scenario assumes vs. what the Fund actually experienced", side = 3, line = 0.2, adj = 0.02, cex = 0.9, col = DGREY, outer = TRUE, font = 2)
 dev.off()
 
 ## c6: NOL implied by the stress scenarios (trough basis; current scenario on the formula) --------------
@@ -107,4 +124,34 @@ axis(1, at = c(1.20, 1.30, 1.40, 1.50), labels = sprintf("%.2f%%", c(1.20, 1.30,
 axis(2, at = ypos, labels = scen, las = 1, lwd = 0, cex.axis = 0.74)
 mtext("NOL implied by stress scenarios run through the same model (Dec-2026 start)", side = 3, line = 0.2, adj = 0.02, cex = 0.85, col = DGREY, outer = TRUE)
 dev.off()
+## c7: the six changes as a waterfall for the 2026 model year (needs `ladder` from 12_tweaks.R) -----------------
+if (exists("ladder")) {
+  L26 <- ladder[ladder$vintage == 2026, ]
+  lev <- c(L26$s0_current, L26$s1_trough, L26$s2_trued_base, L26$s3_yield_frozen, L26$s4_rec_shares, L26$s5_hist_losses, L26$s6_concentration)
+  steps <- c("Formula\ntoday", "1 Worst\npoint", "2 Capital\nheld", "3 Gains when\nearned", "4 Deposit\ninflows", "5 Loss\nwave", "6 One large\nfailure", "All six\nelements")
+  open_png("c7_ladder.png", 5.6, 4.15); base_par(c(7.0, 3.6, 2.2, 0.6)); par(xaxs = "i", yaxs = "i")
+  plot(NA, xlim = c(0.4, 8.6), ylim = c(1.15, 1.37), axes = FALSE, xlab = "", ylab = "")
+  hgrid(seq(1.15, 1.35, 0.05)); axis(2, at = seq(1.15, 1.35, 0.05), labels = sprintf("%.2f%%", seq(1.15, 1.35, 0.05)), las = 1, lwd = 0)
+  abline(h = 1.20, col = RED, lty = 2); abline(h = 1.33, col = GOLD, lty = 2, lwd = 1.5)
+  text(4.5, 1.197, "statutory floor", col = RED, cex = 0.66, adj = c(0.5, 1)); text(0.45, 1.332, "level in force, 1.33%", col = GOLD, cex = 0.66, adj = c(0, 0))
+  rect(1 - 0.34, 1.15, 1 + 0.34, lev[1], col = GREY, border = NA)
+  MID <- "#6C8EBF"
+  for (i in 2:7) { lo <- lev[i - 1]; hi <- lev[i]; rect(i - 0.34, lo, i + 0.34, hi, col = if (i <= 4) NAVY else MID, border = NA)
+    segments(i - 1 + 0.34, lo, i - 0.34, lo, col = "#9AA3AF", lty = 3)
+    text(i, hi + 0.004, sprintf("%+.1f bp", 100 * (hi - lo)), cex = 0.68, col = NAVY, font = 2, adj = c(0.5, 0)) }
+  rect(8 - 0.34, 1.15, 8 + 0.34, lev[7], col = TEAL, border = NA)
+  text(1, lev[1] + 0.004, sprintf("%.2f%%", lev[1]), cex = 0.78, font = 2, col = DGREY, adj = c(0.5, 0))
+  text(8, lev[7] + 0.004, sprintf("%.2f%%", lev[7]), cex = 0.78, font = 2, col = TEAL, adj = c(0.5, 0))
+  for (i in 1:8) mtext(steps[i], side = 1, at = i, line = 1.9, cex = 0.62, col = DGREY)
+  mtext("NOL", side = 1, at = 0.3, line = 3.15, cex = 0.62, col = GREY, adj = 1, font = 3)
+  for (i in 1:8) mtext(sprintf("%.2f%%", lev[c(1:7, 7)][i]), side = 1, at = i, line = 3.15, cex = 0.68, font = 2, col = c(GREY, rep(NAVY, 3), rep(MID, 3), TEAL)[i])
+  mtext(sprintf("Seven model years: %.2f\u2013%.2f%% (a %.0f bp range) vs %.2f\u2013%.2f%% (%.0f bp) today",
+                min(ladder$s6_concentration), max(ladder$s6_concentration), 100 * diff(range(ladder$s6_concentration)), min(ladder$s0_current), max(ladder$s0_current), 100 * diff(range(ladder$s0_current))),
+        side = 1, line = 4.6, adj = 0, at = 0.4, cex = 0.7, font = 2, col = NAVY)
+  mtext(sprintf("The Fund's own history replayed through the same model: %.2f\u2013%.2f%%", min(stress$nol[-1]), max(stress$nol[-1])),
+        side = 1, line = 5.5, adj = 0, at = 0.4, cex = 0.7, col = DGREY)
+  legend(1.6, 1.372, legend = c("measurement: getting the arithmetic right", "risk elements: what a downturn actually does"), fill = c(NAVY, MID), border = NA, bty = "n", cex = 0.66, text.col = DGREY)
+  mtext("2026 model year: the formula today, then each element recognised in turn", side = 3, line = 0.6, adj = 0, cex = 0.85, col = DGREY)
+  dev.off()
+}
 cat("deck charts written to deck_images/:", paste(list.files("deck_images"), collapse = ", "), "\n")
